@@ -1,0 +1,41 @@
+name: mydp
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Download ngrok
+      run: |
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+        Expand-Archive ngrok.zip -DestinationPath .
+
+    - name: Authenticate with ngrok
+      run: |
+        ./ngrok authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}  # Set ngrok auth token in GitHub Secrets
+
+    - name: Enable TS
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "Haxkd@12" -Force)
+
+    - name: Start ngrok TCP Tunnel
+      run: |
+        ./ngrok tcp 3389
+
+    - name: Create SSH Tunnel with ngrok
+      run: |
+        Start-Process ./ngrok.exe tcp 3389 -NoNewWindow  # Start ngrok tunnel in the background
+
+    - name: Get ngrok Tunnel URL
+      run: |
+        $ngrokOutput = ./ngrok.exe tcp 3389
+        $url = ($ngrokOutput | Select-String -Pattern "tcp://.*" | ForEach-Object { $_.Matches }).Value.Trim()
+        Write-Output "RDP accessible at $url"
